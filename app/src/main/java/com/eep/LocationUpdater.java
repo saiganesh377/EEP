@@ -48,8 +48,10 @@ class MotionEventNotRecycled(config: Config) : Rule(config) {
     }
 
     private fun isMotionEventCall(call: KtCallExpression): Boolean {
-        // Check if the MotionEvent import is present in the file
-        val fileImports = (call.containingKtFile.importDirectives.map { it.importPath?.toString() } ?: emptyList())
-        return fileImports.any { it.contains("MotionEvent") }
-    }
+    // Get the import directives from the file
+    val fileImports = call.containingKtFile.importDirectives.mapNotNull { it.importPath?.toString() }
+    
+    // Check if any import contains "MotionEvent"
+    return fileImports.any { it.contains("MotionEvent") }
+}
 }
