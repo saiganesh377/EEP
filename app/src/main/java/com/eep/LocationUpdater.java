@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.psi.*
 
 class ObjectInstantiationInOnDraw(config: Config) : Rule(config) {
 
-    override val issue: Issue = Issue(
+    override val issue = Issue(
         id = "ObjectInstantiationInOnDraw",
         severity = Severity.Performance,
         description = "Avoid object instantiation inside onDraw() method to improve performance.",
@@ -11,18 +11,16 @@ class ObjectInstantiationInOnDraw(config: Config) : Rule(config) {
     )
 
     override fun visitNamedFunction(function: KtNamedFunction) {
-        // Check if the method is named "onDraw"
+        // Check if the function is named "onDraw"
         if (function.name == "onDraw") {
-            // Traverse through the function body to find object instantiations
+            // Traverse the function body and find any constructor calls (e.g., Paint(), Rect(), etc.)
             function.bodyExpression?.forEachDescendantOfType<KtCallExpression> { callExpression ->
-                // Checking if the call expression is an object creation (constructor call)
-                val callee = callExpression.calleeExpression
-                if (callee is KtNameReferenceExpression && callExpression.isConstructorCall()) {
+                if (callExpression.isConstructorCall()) {
                     report(
                         CodeSmell(
                             issue,
                             Entity.from(callExpression),
-                            "Object instantiation inside onDraw() method can lead to performance issues."
+                            "Avoid object instantiation inside onDraw() method. Consider moving object creation outside the method."
                         )
                     )
                 }
@@ -32,8 +30,7 @@ class ObjectInstantiationInOnDraw(config: Config) : Rule(config) {
     }
 
     private fun KtCallExpression.isConstructorCall(): Boolean {
-        // Check if this call expression is a constructor call (e.g., Paint(), Rect())
-        val type = calleeExpression?.text ?: return false
-        return type.isNotEmpty() && !type[0].isLowerCase() // Class names in Kotlin start with uppercase letters
+        // Detect if the expression is a constructor call
+        return calleeExpression?.text?.firstOrNull()?.isUpperCase() == true
     }
 }
