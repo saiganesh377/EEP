@@ -1,50 +1,48 @@
 import io.gitlab.arturbosch.detekt.api.*
-import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtCallExpression
+import org.jetbrains.kotlin.psi.KtNamedFunction
 
-class ParcelNotRecycledRule(config: Config) : Rule(config) {
+class ParcelNotRecycled(config: Config) : Rule(config) {
 
-    override val issue = Issue(
-        id = "ParcelNotRecycled",
-        severity = Severity.Performance,
-        description = "Parcel obtained but not recycled. Always recycle Parcel objects to prevent memory leaks.",
-        debt = Debt.FIVE_MINS
-    )
+    override val issue = Issue(javaClass.simpleName,
+        Severity.CodeSmell,
+        "This rule reports Parcel objects that are obtained but not recycled.",
+        Debt.TWENTY_MINS)
+
+    private val parcelFunctionNames = listOf("obtain") // You can add more if needed
+    private val recycleFunctionName = "recycle"
+
+    private val parcels: MutableList<KtCallExpression> = mutableListOf()
+
+    override fun visitKtFile(file: KtFile) {
+        super.visitKtFile(file)
+        // Check for any un-recycled parcels
+        parcels.forEach { parcel ->
+            report(CodeSmell(issue, Entity.from(parcel),
+                "Parcel obtained but 'recycle()' not called."))
+        }
+        parcels.clear() // Clear the list after processing the file
+    }
 
     override fun visitNamedFunction(function: KtNamedFunction) {
         super.visitNamedFunction(function)
+        function.bodyExpression?.accept(this)
+    }
 
-        var parcelObtained = false
-        var parcelRecycled = false
+    override fun visitCallExpression(call: KtCallExpression) {
+        super.visitCallExpression(call)
 
-        // Traverse the function body to check for Parcel.obtain() and recycle() calls
-        function.bodyExpression?.let { body ->
-            body.accept(object : KtTreeVisitorVoid() {
-                override fun visitCallExpression(expression: KtCallExpression) {
-                    super.visitCallExpression(expression)
+        val functionName = call.calleeExpression?.text
 
-                    // Check for Parcel.obtain() call
-                    if (expression.calleeExpression?.text == "obtain" &&
-                        expression.firstChild?.text == "Parcel") {
-                        parcelObtained = true
-                    }
-
-                    // Check for recycle() call
-                    if (expression.calleeExpression?.text == "recycle") {
-                        parcelRecycled = true
-                    }
-                }
-            })
+        // Check if the call is for obtaining a Parcel
+        if (parcelFunctionNames.contains(functionName)) {
+            parcels.add(call) // Add to the list of obtained parcels
         }
 
-        // Report if Parcel was obtained but not recycled
-        if (parcelObtained && !parcelRecycled) {
-            report(
-                CodeSmell(
-                    issue,
-                    Entity.from(function),
-                    "Parcel obtained but not recycled in function ${function.name}."
-                )
-            )
+        // Check if the call is for recycling a Parcel
+        if (functionName == recycleFunctionName) {
+            parcels.clear() // Clear the list since a recycle was found
         }
     }
 }
