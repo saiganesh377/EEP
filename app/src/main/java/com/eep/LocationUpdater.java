@@ -12,24 +12,31 @@ class ParcelNotRecycledRule(config: Config) : Rule(config) {
 
     override fun visitNamedFunction(function: KtNamedFunction) {
         super.visitNamedFunction(function)
-        
+
         var parcelObtained = false
         var parcelRecycled = false
 
-        // Traverse all the call expressions within the function body
-        function.bodyExpression?.forEachDescendantOfType<KtCallExpression> { callExpression ->
-            // Check if Parcel.obtain() is called
-            if (callExpression.calleeExpression?.text == "obtain" &&
-                (callExpression.firstChild.text == "Parcel" || callExpression.firstChild.text == "android.os.Parcel")) {
-                parcelObtained = true
-            }
-            // Check if recycle() is called on a Parcel object
-            if (callExpression.calleeExpression?.text == "recycle") {
-                parcelRecycled = true
-            }
+        // Traverse the function body to check for Parcel.obtain() and recycle() calls
+        function.bodyExpression?.let { body ->
+            body.accept(object : KtTreeVisitorVoid() {
+                override fun visitCallExpression(expression: KtCallExpression) {
+                    super.visitCallExpression(expression)
+
+                    // Check for Parcel.obtain() call
+                    if (expression.calleeExpression?.text == "obtain" &&
+                        expression.firstChild?.text == "Parcel") {
+                        parcelObtained = true
+                    }
+
+                    // Check for recycle() call
+                    if (expression.calleeExpression?.text == "recycle") {
+                        parcelRecycled = true
+                    }
+                }
+            })
         }
 
-        // Report an issue if Parcel.obtain() was called but recycle() wasn't
+        // Report if Parcel was obtained but not recycled
         if (parcelObtained && !parcelRecycled) {
             report(
                 CodeSmell(
