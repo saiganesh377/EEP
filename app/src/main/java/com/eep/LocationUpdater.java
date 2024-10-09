@@ -2,6 +2,7 @@ import io.gitlab.arturbosch.detekt.api.*
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.resolve.BindingContext
 
 class ParcelNotRecycled(config: Config) : Rule(config) {
@@ -11,14 +12,14 @@ class ParcelNotRecycled(config: Config) : Rule(config) {
         "This rule reports Parcel objects that are obtained but not recycled.",
         Debt.TWENTY_MINS)
 
-    private val obtainFunctionNames = listOf("obtain") // You can add more if needed
-    private val recycleFunctionName = "recycle"
+    private val obtainFunctionNames = listOf("obtain") // Method name to check
+    private val recycleFunctionName = "recycle" // Method name to check
 
     private val parcels: MutableList<KtCallExpression> = mutableListOf()
 
     override fun visitKtFile(file: KtFile) {
         super.visitKtFile(file)
-        // Check for any un-recycled Parcel objects
+        // Report any un-recycled Parcel objects
         parcels.forEach { parcel ->
             report(CodeSmell(issue, Entity.from(parcel),
                 "Parcel obtained but 'recycle()' not called."))
@@ -37,20 +38,25 @@ class ParcelNotRecycled(config: Config) : Rule(config) {
         val functionName = call.calleeExpression?.text
 
         // Check if the call is for obtaining a Parcel
-        if (obtainFunctionNames.contains(functionName) && isParcelCall(call)) {
+        if (obtainFunctionNames.contains(functionName) && isParcelObtained(call)) {
             parcels.add(call) // Add to the list of obtained Parcels
         }
 
         // Check if the call is for recycling a Parcel
-        if (functionName == recycleFunctionName) {
-            parcels.clear() // Clear the list since a recycle was found
+        if (functionName == recycleFunctionName && isParcelRecycled(call)) {
+            parcels.removeIf { it.getParent() == call.getParent() } // Remove the associated Parcel obtain call
         }
     }
 
-    private fun isParcelCall(call: KtCallExpression): Boolean {
-        // Check if the obtained type is Parcel
-        val resolvedCall = call.getResolvedCall(bindingContext) ?: return false
-        val returnType = resolvedCall.resultingDescriptor.returnType?.toString()
-        return returnType == "android.os.Parcel" // Ensure the type is Parcel
+    private fun isParcelObtained(call: KtCallExpression): Boolean {
+        // Ensure the call is from a Parcel object
+        val receiver = call.parent as? KtQualifiedExpression
+        return receiver?.receiverExpression?.text == "Parcel"
+    }
+
+    private fun isParcelRecycled(call: KtCallExpression): Boolean {
+        // Ensure the call is from a Parcel object
+        val receiver = call.parent as? KtQualifiedExpression
+        return receiver?.receiverExpression?.text == "Parcel"
     }
 }
