@@ -37,7 +37,7 @@ class MotionEventNotRecycled(config: Config) : Rule(config) {
         val functionName = call.calleeExpression?.text
 
         // Check if the call is for obtaining a MotionEvent
-        if (motionEventFunctionNames.contains(functionName) && isMotionEventObtained(call)) {
+        if (motionEventFunctionNames.contains(functionName) && isMotionEventCall(call)) {
             motionEvents.add(call) // Add to the list of obtained MotionEvents
         }
 
@@ -47,9 +47,9 @@ class MotionEventNotRecycled(config: Config) : Rule(config) {
         }
     }
 
-    private fun isMotionEventObtained(call: KtCallExpression): Boolean {
-        // Check the qualified name of the call expression
-        val type = call.getResolvedCall(bindingContext)?.resultingDescriptor?.returnType?.toString()
-        return type == "android.view.MotionEvent" // Ensure the type is MotionEvent
+    private fun isMotionEventCall(call: KtCallExpression): Boolean {
+        // Check if the MotionEvent import is present in the file
+        val fileImports = (call.containingKtFile.importDirectives.map { it.importPath?.toString() } ?: emptyList())
+        return fileImports.any { it.contains("MotionEvent") }
     }
 }
