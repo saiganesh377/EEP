@@ -13,14 +13,14 @@ class ObjectInstantiationInOnDraw(config: Config) : Rule(config) {
     override fun visitNamedFunction(function: KtNamedFunction) {
         // Check if the function is named "onDraw"
         if (function.name == "onDraw") {
-            // Traverse the function body and find any constructor calls (e.g., Paint(), Rect(), etc.)
+            // Traverse the function body and find constructor calls
             function.bodyExpression?.forEachDescendantOfType<KtCallExpression> { callExpression ->
                 if (callExpression.isConstructorCall()) {
                     report(
                         CodeSmell(
                             issue,
                             Entity.from(callExpression),
-                            "Avoid object instantiation inside onDraw() method. Consider moving object creation outside the method."
+                            "Object instantiation inside onDraw() method can lead to performance issues."
                         )
                     )
                 }
@@ -29,8 +29,10 @@ class ObjectInstantiationInOnDraw(config: Config) : Rule(config) {
         super.visitNamedFunction(function)
     }
 
+    // Helper function to check if a call is a constructor call (e.g., Paint(), Rect())
     private fun KtCallExpression.isConstructorCall(): Boolean {
-        // Detect if the expression is a constructor call
-        return calleeExpression?.text?.firstOrNull()?.isUpperCase() == true
+        // A constructor call would have an uppercase callee (class names in Kotlin start with uppercase letters)
+        val calleeName = calleeExpression?.text ?: return false
+        return calleeName.isNotEmpty() && calleeName[0].isUpperCase()
     }
 }
