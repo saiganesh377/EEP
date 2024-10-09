@@ -2,6 +2,7 @@ import io.gitlab.arturbosch.detekt.api.*
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtImportDirective
 
 class MotionEventNotRecycled(config: Config) : Rule(config) {
 
@@ -36,7 +37,7 @@ class MotionEventNotRecycled(config: Config) : Rule(config) {
         val functionName = call.calleeExpression?.text
 
         // Check if the call is for obtaining a MotionEvent
-        if (motionEventFunctionNames.contains(functionName)) {
+        if (motionEventFunctionNames.contains(functionName) && isMotionEventObtained(call)) {
             motionEvents.add(call) // Add to the list of obtained MotionEvents
         }
 
@@ -44,5 +45,11 @@ class MotionEventNotRecycled(config: Config) : Rule(config) {
         if (functionName == recycleFunctionName) {
             motionEvents.clear() // Clear the list since a recycle was found
         }
+    }
+
+    private fun isMotionEventObtained(call: KtCallExpression): Boolean {
+        // Check the qualified name of the call expression
+        val type = call.getResolvedCall(bindingContext)?.resultingDescriptor?.returnType?.toString()
+        return type == "android.view.MotionEvent" // Ensure the type is MotionEvent
     }
 }
