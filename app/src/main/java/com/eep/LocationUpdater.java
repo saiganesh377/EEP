@@ -1,63 +1,72 @@
-package com.example.gps;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
-import com.google.android.gms.location.LocationServices;
+import io.gitlab.arturbosch.detekt.test.compileAndLint
+import org.junit.jupiter.api.Test
 
+class ObjectInstantiationInOnDrawTest {
 
-import android.content.Context;
-import android.content.pm.PackageManager;
-import android.location.Location;
-import android.util.Log;
-import android.Manifest;
-import androidx.core.app.ActivityCompat;
-public class LocationUpdater {
-    FusedLocationProviderClient fused;
-    private static String TAG = "dummy";
-    LocationRequest locreq = new LocationRequest();
+    private val rule = ObjectInstantiationInOnDraw(Config.empty)
 
+    @Test
+    fun `no object instantiation in onDraw should pass`() {
+        val code = """
+            import android.content.Context
+            import android.graphics.Canvas
+            import android.view.View
 
-    public void setLow(){
-        locreq.setPriority(LocationRequest.PRIORITY_LOW_POWER);
-        Log.d(TAG,"Saving Power");
-    }
-    public void setHigh(){
-        locreq.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        Log.d(TAG,"High accuracy");
-    }
-
-    public void setinterval(){
-        locreq.setInterval(10000);
-    }
-
-    private void LogLocation(Location location){
-        Log.d(TAG, String.valueOf(location.getAccuracy()));
-        Log.d(TAG, String.valueOf(location.getLatitude()));
-        Log.d(TAG, String.valueOf(location.getLongitude()));
-
-    }
-
-    public void updateGPS(Context context) {
-        if (ActivityCompat.checkSelfPermission(context,Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "inside if");
-            fused = LocationServices.getFusedLocationProviderClient(context);
-
-            LocationCallback locationCallback = new LocationCallback() {
-                @Override
-                public void onLocationResult(LocationResult locationResult) {
-                    for (Location location : locationResult.getLocations()) {
-                        Log.d(TAG, "Location update");
-                        LogLocation(location);
-                    }
+            class CustomView(context: Context) : View(context) {
+                override fun onDraw(canvas: Canvas?) {
+                    // No object instantiation here
+                    canvas?.drawColor(android.graphics.Color.BLACK)
                 }
-            };
+            }
+        """.trimIndent()
 
-            // Set the location update interval to 5 seconds (5000 milliseconds)
-            locreq.setInterval(5000);
-            locreq.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        val findings = rule.compileAndLint(code)
+        assert(findings.isEmpty()) { "Expected no findings, but found ${findings.size}" }
+    }
 
-            fused.requestLocationUpdates(locreq, locationCallback, null);
+    @Test
+    fun `object instantiation in onDraw should fail`() {
+        val code = """
+            import android.content.Context
+            import android.graphics.Canvas
+            import android.graphics.Paint
+            import android.view.View
+
+            class CustomView(context: Context) : View(context) {
+                override fun onDraw(canvas: Canvas?) {
+                    // Object instantiation inside onDraw
+                    val paint = Paint()
+                    canvas?.drawColor(android.graphics.Color.BLACK)
+                }
+            }
+        """.trimIndent()
+
+        val findings = rule.compileAndLint(code)
+        assert(findings.size == 1) { "Expected 1 finding, but found ${findings.size}" }
+        assert(findings[0].message.contains("Object instantiation inside onDraw() method can lead to performance issues.")) {
+            "Expected message to contain information about performance issues, but found: ${findings[0].message}"
         }
+    }
 
-}}
+    @Test
+    fun `multiple object instantiations in onDraw should fail`() {
+        val code = """
+            import android.content.Context
+            import android.graphics.Canvas
+            import android.graphics.Paint
+            import android.graphics.Rect
+            import android.view.View
+
+            class CustomView(context: Context) : View(context) {
+                override fun onDraw(canvas: Canvas?) {
+                    val paint = Paint()
+                    val rect = Rect()
+                    canvas?.drawRect(rect, paint)
+                }
+            }
+        """.trimIndent()
+
+        val findings = rule.compileAndLint(code)
+        assert(findings.size == 2) { "Expected 2 findings, but found ${findings.size}" }
+    }
+}
