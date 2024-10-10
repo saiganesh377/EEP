@@ -1,61 +1,42 @@
+package com.custom.detekt.rules
+
 import io.gitlab.arturbosch.detekt.api.*
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.psi.KtNamedFunction
-import org.jetbrains.kotlin.psi.KtQualifiedExpression
+import org.jetbrains.kotlin.psi.*
 
-class MotionEventNotRecycled(config: Config) : Rule(config) {
-
-    override val issue = Issue(javaClass.simpleName,
-        Severity.CodeSmell,
-        "This rule reports MotionEvent objects that are obtained but not recycled.",
-        Debt.TWENTY_MINS)
-
-    private val obtainFunctionNames = listOf("obtain") // Method name to check
-    private val recycleFunctionName = "recycle" // Method name to check
-
-    private val motionEvents: MutableList<KtCallExpression> = mutableListOf()
-
-    override fun visitKtFile(file: KtFile) {
-        super.visitKtFile(file)
-        // Report any un-recycled MotionEvent objects
-        motionEvents.forEach { motionEvent ->
-            report(CodeSmell(issue, Entity.from(motionEvent),
-                "MotionEvent obtained but 'recycle()' not called."))
-        }
-        motionEvents.clear() // Clear the list after processing the file
-    }
+class ObjectAllocationInOnDrawRule(config: Config) : Rule(config) {
+    
+    override val issue: Issue = Issue(
+        id = "ObjectAllocationInOnDraw",
+        severity = Severity.Performance,
+        description = "Object allocations inside onDraw function can cause performance issues.",
+        debt = Debt.TWENTY_MINS
+    )
 
     override fun visitNamedFunction(function: KtNamedFunction) {
+        // Check if the function is named 'onDraw'
+        if (function.name == "onDraw") {
+            // Visit the body of the onDraw function
+            function.bodyBlockExpression?.let { body ->
+                body.statements.forEach { statement ->
+                    // Check for variable declarations (e.g., val or var)
+                    if (statement is KtProperty) {
+                        statement.initializer?.let { initializer ->
+                            // Look for any object instantiation
+                            if (initializer is KtCallExpression) {
+                                // Report object allocation inside onDraw
+                                report(
+                                    CodeSmell(
+                                        issue,
+                                        Entity.from(statement),
+                                        "Avoid object allocations inside onDraw. Allocating objects like '${initializer.calleeExpression?.text}' may cause performance issues."
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         super.visitNamedFunction(function)
-        function.bodyExpression?.accept(this)
-    }
-
-    override fun visitCallExpression(call: KtCallExpression) {
-        super.visitCallExpression(call)
-
-        val functionName = call.calleeExpression?.text
-
-        // Check if the call is for obtaining a MotionEvent
-        if (obtainFunctionNames.contains(functionName) && isMotionEventObtained(call)) {
-            motionEvents.add(call) // Add to the list of obtained MotionEvents
-        }
-
-        // Check if the call is for recycling a MotionEvent
-        if (functionName == recycleFunctionName && isMotionEventRecycled(call)) {
-            motionEvents.removeIf { it.getParent() == call.getParent() } // Remove the associated MotionEvent obtain call
-        }
-    }
-
-    private fun isMotionEventObtained(call: KtCallExpression): Boolean {
-        // Ensure the call is from a MotionEvent object
-        val receiver = call.parent as? KtQualifiedExpression
-        return receiver?.receiverExpression?.text == "MotionEvent"
-    }
-
-    private fun isMotionEventRecycled(call: KtCallExpression): Boolean {
-        // Ensure the call is from a MotionEvent object
-        val receiver = call.parent as? KtQualifiedExpression
-        return receiver?.receiverExpression?.text == "MotionEvent"
     }
 }
