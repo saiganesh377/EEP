@@ -1,38 +1,38 @@
-package com.custom.detekt.rules
+import io.gitlab.arturbosch.detekt.test.*
+import io.gitlab.arturbosch.detekt.api.Rule
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
 
-import io.gitlab.arturbosch.detekt.api.*
-import org.jetbrains.kotlin.psi.*
+class SetReportDelayRuleTest {
 
-class SetReportDelayRule(config: Config) : Rule(config) {
+    private val rule: Rule = SetReportDelayRule(TestConfig())
 
-    override val issue: Issue = Issue(
-        id = "SetReportDelayThreshold",
-        severity = Severity.Performance,
-        description = "The setReportDelay value in ScanSettings should be less than 5000 milliseconds.",
-        debt = Debt.FIVE_MINS
-    )
+    @Test
+    fun `report if setReportDelay is more than 5000`() {
+        val code = """
+            val scanSettings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setReportDelay(6000)  // Should trigger a violation
+                .build()
+        """.trimIndent()
 
-    override fun visitCallExpression(expression: KtCallExpression) {
-        // Check if the method called is 'setReportDelay'
-        val methodName = expression.calleeExpression?.text
-        if (methodName == "setReportDelay") {
-            // Extract the argument passed to setReportDelay
-            val argument = expression.valueArguments.firstOrNull()?.getArgumentExpression()
-            if (argument is KtConstantExpression) {
-                // Parse the value of the argument
-                val delayValue = argument.text.toLongOrNull()
-                // Check if the delay value exceeds 5000
-                if (delayValue != null && delayValue >= 5000) {
-                    report(
-                        CodeSmell(
-                            issue,
-                            Entity.from(expression),
-                            "setReportDelay should be less than 5000 milliseconds to avoid performance issues."
-                        )
-                    )
-                }
-            }
-        }
-        super.visitCallExpression(expression)
+        val findings = rule.compileAndLint(code)
+
+        assertEquals(1, findings.size)  // Expect 1 violation
+        assertEquals("setReportDelay should be less than 5000 milliseconds to avoid performance issues.", findings[0].message)
+    }
+
+    @Test
+    fun `do not report if setReportDelay is less than 5000`() {
+        val code = """
+            val scanSettings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setReportDelay(3000)  // Should not trigger a violation
+                .build()
+        """.trimIndent()
+
+        val findings = rule.compileAndLint(code)
+
+        assertEquals(0, findings.size)  // Expect no violations
     }
 }
