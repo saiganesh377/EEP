@@ -3,40 +3,36 @@ package com.custom.detekt.rules
 import io.gitlab.arturbosch.detekt.api.*
 import org.jetbrains.kotlin.psi.*
 
-class ObjectAllocationInOnDrawRule(config: Config) : Rule(config) {
-    
+class SetReportDelayRule(config: Config) : Rule(config) {
+
     override val issue: Issue = Issue(
-        id = "ObjectAllocationInOnDraw",
+        id = "SetReportDelayThreshold",
         severity = Severity.Performance,
-        description = "Object allocations inside onDraw function can cause performance issues.",
-        debt = Debt.TWENTY_MINS
+        description = "The setReportDelay value in ScanSettings should be less than 5000 milliseconds.",
+        debt = Debt.FIVE_MINS
     )
 
-    override fun visitNamedFunction(function: KtNamedFunction) {
-        // Check if the function is named 'onDraw'
-        if (function.name == "onDraw") {
-            // Visit the body of the onDraw function
-            function.bodyBlockExpression?.let { body ->
-                body.statements.forEach { statement ->
-                    // Check for variable declarations (e.g., val or var)
-                    if (statement is KtProperty) {
-                        statement.initializer?.let { initializer ->
-                            // Look for any object instantiation
-                            if (initializer is KtCallExpression) {
-                                // Report object allocation inside onDraw
-                                report(
-                                    CodeSmell(
-                                        issue,
-                                        Entity.from(statement),
-                                        "Avoid object allocations inside onDraw. Allocating objects like '${initializer.calleeExpression?.text}' may cause performance issues."
-                                    )
-                                )
-                            }
-                        }
-                    }
+    override fun visitCallExpression(expression: KtCallExpression) {
+        // Check if the method called is 'setReportDelay'
+        val methodName = expression.calleeExpression?.text
+        if (methodName == "setReportDelay") {
+            // Extract the argument passed to setReportDelay
+            val argument = expression.valueArguments.firstOrNull()?.getArgumentExpression()
+            if (argument is KtConstantExpression) {
+                // Parse the value of the argument
+                val delayValue = argument.text.toLongOrNull()
+                // Check if the delay value exceeds 5000
+                if (delayValue != null && delayValue >= 5000) {
+                    report(
+                        CodeSmell(
+                            issue,
+                            Entity.from(expression),
+                            "setReportDelay should be less than 5000 milliseconds to avoid performance issues."
+                        )
+                    )
                 }
             }
         }
-        super.visitNamedFunction(function)
+        super.visitCallExpression(expression)
     }
 }
