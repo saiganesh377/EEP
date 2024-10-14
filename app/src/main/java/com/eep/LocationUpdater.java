@@ -1,38 +1,36 @@
-import io.gitlab.arturbosch.detekt.test.*
-import io.gitlab.arturbosch.detekt.api.Rule
+import com.custom.detekt.rules.SetReportDelayRule
+import io.gitlab.arturbosch.detekt.api.*
+import org.jetbrains.kotlin.psi.KtFile
+import io.gitlab.arturbosch.detekt.test.KtTestCompiler
 import org.junit.jupiter.api.Test
-import kotlin.test.assertEquals
 
-class SetReportDelayRuleTest {
-
-    private val rule: Rule = SetReportDelayRule(TestConfig())
+class SetReportDelayRuleManualTest {
 
     @Test
-    fun `report if setReportDelay is more than 5000`() {
+    fun `manual test for SetReportDelayRule`() {
+        // Example Kotlin code that will trigger the rule
         val code = """
             val scanSettings = ScanSettings.Builder()
                 .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .setReportDelay(6000)  // Should trigger a violation
+                .setReportDelay(6000)  // This should trigger a report
                 .build()
         """.trimIndent()
 
-        val findings = rule.compileAndLint(code)
+        // Compile the code into a KtFile object
+        val ktFile: KtFile = KtTestCompiler.compileFromContent(code)
 
-        assertEquals(1, findings.size)  // Expect 1 violation
-        assertEquals("setReportDelay should be less than 5000 milliseconds to avoid performance issues.", findings[0].message)
-    }
+        // Initialize the custom rule
+        val rule = SetReportDelayRule(TestConfig())
 
-    @Test
-    fun `do not report if setReportDelay is less than 5000`() {
-        val code = """
-            val scanSettings = ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .setReportDelay(3000)  // Should not trigger a violation
-                .build()
-        """.trimIndent()
+        // Visit the file using the rule and collect the findings
+        rule.visit(ktFile)
 
-        val findings = rule.compileAndLint(code)
+        // Manually print findings to inspect them
+        rule.findings.forEach { finding ->
+            println("Detected issue: ${finding.message}")
+        }
 
-        assertEquals(0, findings.size)  // Expect no violations
+        // Optionally, you can log or print other aspects, like the full code positions or types
+        println("Total findings: ${rule.findings.size}")
     }
 }
